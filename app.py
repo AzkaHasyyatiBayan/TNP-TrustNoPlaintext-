@@ -375,12 +375,12 @@ def process_file():
                 download_mime = container_meta.get("mime", "application/octet-stream")
                 expected_sha256 = container_meta.get("sha256", "")
 
-                # Decrypt payload
+                # Decrypt payload using the appropriate cipher
                 if cipher_id == "extended_vigenere":
-                    key = request.form.get('key', 'AegisVault2026')
+                    key = request.form.get('key', 'TnpTacticalVaultKey2026')
                     result_bytes = extended_vigenere.decrypt_bytes(payload_bytes, key.encode('utf-8'))
                 elif cipher_id == "super_encryption":
-                    v_key = request.form.get('vigenere_key', 'SENTINELKEY')
+                    v_key = request.form.get('vigenere_key', 'TNPVAULTKEY2026')
                     t_key = request.form.get('trans_key', 'TACTICAL')
                     result_bytes = super_encryption.decrypt(payload_bytes, v_key, t_key)
                 else:
@@ -388,16 +388,23 @@ def process_file():
 
                 # Verify cryptographic integrity
                 actual_sha256 = hashlib.sha256(result_bytes).hexdigest()
-                if expected_sha256 and actual_sha256 != expected_sha256:
-                    # Integrity failure (wrong key or corrupt file)
-                    pass
+                integrity_match = (expected_sha256 == actual_sha256) if expected_sha256 else True
             else:
-                # Raw binary file decryption without container
+                # File does not have a TNP container header
+                ext_check = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+                if ext_check in ['jpg', 'jpeg', 'png', 'mp4', 'mkv', 'avi', 'wav', 'mp3', 'db', 'sqlite', 'sqlite3', 'txt', 'docx', 'pdf']:
+                    return jsonify({
+                        "success": False,
+                        "error": f"Berkas '{filename}' terdeteksi sebagai berkas asli (plaintext), bukan berkas cipherteks (.dat). "
+                                 f"Untuk melakukan dekripsi/pemulihan, silakan unggah berkas .dat yang dihasilkan dari tab Enkripsi!"
+                    }), 400
+
+                # Fallback for raw byte encrypted files
                 if cipher_id == "extended_vigenere":
-                    key = request.form.get('key', 'AegisVault2026')
+                    key = request.form.get('key', 'TnpTacticalVaultKey2026')
                     result_bytes = extended_vigenere.decrypt_bytes(raw_bytes, key.encode('utf-8'))
                 elif cipher_id == "super_encryption":
-                    v_key = request.form.get('vigenere_key', 'SENTINELKEY')
+                    v_key = request.form.get('vigenere_key', 'TNPVAULTKEY2026')
                     t_key = request.form.get('trans_key', 'TACTICAL')
                     result_bytes = super_encryption.decrypt(raw_bytes, v_key, t_key)
                 else:
@@ -405,6 +412,7 @@ def process_file():
 
                 download_filename = f"decrypted_{filename}"
                 download_mime = "application/octet-stream"
+                integrity_match = True
 
         duration_ms = (time.perf_counter() - t_start) * 1000
         in_sha256 = hashlib.sha256(raw_bytes).hexdigest()
